@@ -7,50 +7,59 @@
 ## Project Structure
 
 ```
-├── README.md                          # This file
-├── package.json                       # Dependencies and npm scripts
-├── tsconfig.json                      # TypeScript configuration
-├── playwright.config.ts               # Playwright root configuration
-├── _Practical Assignment_SDET.md      # Original assignment document
+├── .env.example                           # Configurable environment variables
+├── playwright.config.ts                   # Root Playwright config (BASE_URL, locale, timezone)
+├── tsconfig.json                          # TypeScript strict config
+├── package.json                           # Dependencies and npm scripts
 │
 ├── docs/
-│   ├── 1-requirement-analysis.md     # FR breakdown, edge cases, gaps
-│   ├── 2-test-scenarios.md           # Top 10 scenarios ranked by risk
-│   ├── 3-defect-identification.md    # Defects vs FR-05 API response
-│   ├── 4-test-cases.md               # 12 detailed test cases (TC-01 to TC-12)
-│   ├── 7-ai-reflection.md            # AI tools, usage, modifications, limitations
-│   └── 8-architecture-discussion.md  # Design patterns, folder rationale, tech choices
+│   ├── 1-requirement-analysis.md
+│   ├── 2-test-scenarios.md
+│   ├── 3-defect-identification.md
+│   ├── 4-test-cases.md
+│   ├── 7-ai-reflection.md
+│   └── 8-architecture-discussion.md
 │
 ├── tests/
 │   ├── ui/
-│   │   ├── pages/
-│   │   │   ├── AutocompleteFormPage.ts   # Page Object Model — all form interactions
-│   │   │   └── LoginPage.ts              # Login page scaffold (out of scope)
-│   │   ├── tests/
-│   │   │   └── autocomplete-form.spec.ts # 18 UI test cases
+│   │   ├── config/
+│   │   │   └── playwright.env.ts          # ENV constants (BASE_URL, USER_EMAIL, etc.)
+│   │   ├── data/
+│   │   │   └── test-data.ts               # Shared UI test data and constants
 │   │   ├── fixtures/
-│   │   │   └── autocomplete-form.html    # Self-contained HTML form fixture
-│   │   └── config/
-│   │       └── playwright.env.ts         # Environment config reference
+│   │   │   ├── autocomplete-form.html     # Self-contained HTML form fixture
+│   │   │   └── page.fixtures.ts           # Playwright test.extend() reusable fixtures
+│   │   ├── helpers/
+│   │   │   └── route.helpers.ts           # DRY route mocking utilities
+│   │   ├── pages/
+│   │   │   ├── AutocompleteFormPage.ts    # Page Object Model
+│   │   │   └── LoginPage.ts              # Login page scaffold
+│   │   └── tests/
+│   │       └── autocomplete-form.spec.ts  # 25 UI test cases
+│   │
 │   └── api/
+│       ├── data/
+│       │   └── api-test-data.ts           # Sample API responses (compliant + defective)
+│       ├── helpers/
+│       │   └── api.helpers.ts             # prefixMatch, getErrorPaths, temporal ordering
+│       ├── schema/
+│       │   └── fr05.schema.ts             # Zod FR-05 data contract schema + types
 │       └── tests/
-│           └── api-contract.spec.ts      # 24 API contract test cases
+│           └── api-contract.spec.ts       # 50 API contract test cases
 │
 └── ai-conversation/
-    ├── conversation.json              # Full AI conversation transcript (JSON)
-    └── prompts.md                     # Exact prompts used
+    ├── conversation.json                  # Full AI conversation transcript
+    └── prompts.md                         # Exact prompts used
 ```
 
 ---
 
-## Prerequisites
+## Installation
+
+### Prerequisites
 
 - **Node.js** v18 or higher
 - **npm** v9 or higher
-
----
-
-## Setup Instructions
 
 ### 1. Clone the repository
 
@@ -59,35 +68,61 @@ git clone https://github.com/kunal-geeks/satsure-sdet-assignment.git
 cd satsure-sdet-assignment
 ```
 
-### 2. Install dependencies
+### 2. npm install
 
 ```bash
 npm install
 ```
 
-### 3. Install Playwright browsers
+### 3. Playwright install (Chromium browser)
 
 ```bash
 npm run install:browsers
+# or directly:
+npx playwright install chromium
 ```
 
 ---
 
-## Running the Tests
+## Configuration
 
-### Run all tests (UI + API)
+Copy `.env.example` to `.env` and set values for your environment:
+
+```bash
+cp .env.example .env
+```
+
+| Variable | Default | Description |
+|---|---|---|
+| `BASE_URL` | `https://test.com` | Application base URL |
+| `USER_EMAIL` | `test123@gmail.com` | Test user email |
+| `USER_ACCOUNT_ID` | `98765` | Test user account ID |
+| `LOCALE` | `en-IN` | Browser locale (IETF BCP 47) |
+| `TIMEZONE` | `Asia/Kolkata` | Browser timezone |
+
+You can also pass env vars inline:
+
+```bash
+BASE_URL=https://staging.myapp.com npm test
+```
+
+---
+
+## Running Tests
+
+### Running all tests
 
 ```bash
 npm test
 ```
 
-### Run only UI tests
+### Running UI tests only
 
 ```bash
 npm run test:ui
 ```
 
-### Run only API tests
+### Running API tests only
 
 ```bash
 npm run test:api
@@ -105,81 +140,122 @@ npm run test:headed
 npm run test:debug
 ```
 
-### View HTML report after a test run
+---
+
+## Report Generation
+
+### HTML Report
+
+Generated automatically after every test run at `playwright-report/`.
 
 ```bash
-npm run test:report
+npm run report:html
 ```
 
----
+Opens `playwright-report/index.html` in your browser — shows pass/fail, screenshots, traces.
 
-## Test Coverage Summary
+### Allure Report
 
-### UI Tests (`tests/ui/tests/autocomplete-form.spec.ts`) — 18 tests
+```bash
+# Generate + open in browser
+npm run report:allure
 
-| Group | Tests |
-|---|---|
-| Suggestion Filtering | Empty input shows all, prefix match, no match, reset after clear |
-| Suggestion Selection | Click exact item, verify input populated, verify re-filtering |
-| Form Submission | Success on 200, error on empty, payload text, suggestion_list scoping |
-| Keyboard Navigation | Tab order, Enter submits, Escape clears, Shift+Tab reverses |
+# Generate only (no browser open)
+npm run report:allure:generate
 
-### API Tests (`tests/api/tests/api-contract.spec.ts`) — 24 tests
+# Open already-generated report
+npm run report:allure:open
 
-| Group | Tests |
-|---|---|
-| Schema Validation | Compliant response passes; assignment sample fails with 4 defects |
-| Data Type Validation | Boolean/string/number checks for completed, email, text |
-| Timestamp Validation | UTC rejected, +05:30 accepted, temporal ordering |
-| Locale Validation | en rejected, en-IN accepted, wrong casing rejected |
-| suggestion_list Validation | Prefix-match logic, empty for no match |
-| Negative Tests | Missing text (400), invalid locale (422), wrong types |
+# Generate both HTML and Allure
+npm run report:all
+```
 
-**Total: 42 tests | All passing**
+Allure provides: suite breakdown, timeline view, per-test steps, environment info, failure attachments.
 
 ---
 
-## Defects Identified in FR-05 (Task 2)
+## Test Coverage
 
-The sample API response in the assignment contains **4 Critical defects**:
+### UI Tests — 25 tests (`tests/ui/tests/autocomplete-form.spec.ts`)
 
-| # | Field | Actual | Expected | Severity |
+| Group | Count | Coverage |
+|---|---|---|
+| Suggestion Filtering | 6 | Empty, shared prefix, sub-prefix, no match, clear, exact match |
+| Suggestion Selection | 4 | Click each suggestion, verify input and re-filtering |
+| Form Submission | 5 | Success, empty error, payload text, suggestion_list scoping, server error |
+| Tab Navigation | 3 | Tab order, Shift+Tab, first Tab lands on input |
+| Keyboard Interaction | 4 | Enter submits, Escape clears, Escape resets suggestions, Escape hides error |
+| Error Validation | 3 | Exact error text, mutual exclusivity on error/success |
+
+### API Tests — 50 tests (`tests/api/tests/api-contract.spec.ts`)
+
+| Group | Count | Coverage |
+|---|---|---|
+| Schema Validation | 3 | Compliant passes, defective sample fails, all 8 fields required |
+| Response Field Validation | 8 | Each field: presence, type, value |
+| Data Type Validation | 9 | boolean/string/number for completed, email, text, suggestion_list, account_id |
+| Timestamp Validation | 7 | UTC rejected, IST accepted, temporal ordering, plain date rejected |
+| Locale Validation | 6 | en rejected, en-IN accepted, various invalid formats |
+| Suggestion List Validation | 5 | Prefix logic, exclusion, empty for no match |
+| Negative Tests | 12 | 5 missing fields + 5 invalid datatypes + 2 network-level |
+
+**Total: 75 tests | All passing**
+
+---
+
+## Design Patterns & Coding Standards
+
+- **Page Object Model** — all locators and interactions in `AutocompleteFormPage.ts`; specs only call POM methods
+- **Playwright `test.extend()` fixtures** — `page.fixtures.ts` provides pre-wired `formPage` fixture eliminating per-test boilerplate
+- **DRY route helpers** — `route.helpers.ts` centralises all network mocking; no inline `page.route()` in specs
+- **Separated concerns (SOLID)** — schema (`fr05.schema.ts`), data (`api-test-data.ts`), helpers (`api.helpers.ts`) are independent modules
+- **Configurable base URL** — `BASE_URL` env var; defaults to `https://test.com`; no hardcoded URLs in tests
+- **Type-safe** — full TypeScript strict mode; Zod inferred types for API responses
+- **Mock-first** — all tests run offline via `page.route()`; no live server required
+
+---
+
+## Defects Identified in FR-05
+
+| # | Field | Actual (assignment sample) | Expected | Severity |
 |---|---|---|---|---|
-| D1 | `start_date` | `"2024-03-15T10:30:00Z"` (UTC) | `"2024-03-15T16:00:00+05:30"` (IST) | Critical |
-| D2 | `end_date` | `"2024-03-15T10:32:00Z"` (UTC) | `"2024-03-15T16:02:00+05:30"` (IST) | Critical |
-| D3 | `locale` | `"en"` | `"en-IN"` (IETF BCP 47 with region) | Critical |
+| D1 | `start_date` | `"2024-03-15T10:30:00Z"` | `"2024-03-15T16:00:00+05:30"` | Critical |
+| D2 | `end_date` | `"2024-03-15T10:32:00Z"` | `"2024-03-15T16:02:00+05:30"` | Critical |
+| D3 | `locale` | `"en"` | `"en-IN"` | Critical |
 | D4 | `completed` | `"true"` (string) | `true` (boolean) | Critical |
 
 See `docs/3-defect-identification.md` for full analysis.
 
 ---
 
-## Architecture
+## Dependencies
 
-- **Page Object Model (POM):** All UI locators and actions are encapsulated in `AutocompleteFormPage.ts`. Test specs only call page object methods and assertions.
-- **Mock-first approach:** Tests use Playwright's `page.route()` to mock all network calls. The suite runs fully offline — no live server required.
-- **Zod schema validation:** The FR-05 data contract is codified as a Zod schema, giving type-safe, self-documenting, and reusable validation.
-- **HTML fixture:** A self-contained HTML file (`tests/ui/fixtures/autocomplete-form.html`) implements the form behaviour from the spec, including prefix filtering, suggestion selection, and Escape key handling.
+| Package | Purpose |
+|---|---|
+| `@playwright/test` | Test runner, browser automation, route mocking, fixtures |
+| `typescript` | Static typing, strict mode |
+| `@types/node` | Node.js type definitions |
+| `zod` | Runtime schema validation for FR-05 data contract |
+| `allure-playwright` | Allure reporter plugin for Playwright |
+| `allure-commandline` | Allure CLI to generate HTML report from raw results |
 
-See `docs/8-architecture-discussion.md` for full details.
+---
+
+## CI/CD
+
+GitHub Actions workflow at `.github/workflows/playwright.yml` runs on every push/PR to `main`/`develop`:
+
+- Installs Node.js 20 + Playwright Chromium
+- Runs all 75 tests
+- Uploads **Playwright HTML report** artifact (30 days)
+- Generates and uploads **Allure report** artifact (30 days)
+- Deploys Allure report to **GitHub Pages** on `main` branch
+- Uploads failure traces/screenshots/videos on test failure (7 days)
 
 ---
 
 ## AI Usage
 
-This assignment was completed with assistance from **GitHub Copilot (Claude Sonnet)** via VS Code Copilot CLI.
-
-- See `docs/7-ai-reflection.md` for tools used, modifications made, and limitations identified.
-- See `ai-conversation/conversation.json` for the full AI conversation transcript.
-- See `ai-conversation/prompts.md` for the exact prompts submitted.
-
----
-
-## Dependencies
-
-| Package | Version | Purpose |
-|---|---|---|
-| `@playwright/test` | ^1.44.0 | Test runner, browser automation, network mocking |
-| `typescript` | ^5.4.5 | Static typing |
-| `@types/node` | ^20.12.0 | Node.js type definitions |
-| `zod` | ^3.23.0 | Runtime schema validation for API contract |
+- `docs/7-ai-reflection.md` — tools used, modifications, limitations
+- `ai-conversation/conversation.json` — full AI conversation transcript (JSON)
+- `ai-conversation/prompts.md` — exact prompts used

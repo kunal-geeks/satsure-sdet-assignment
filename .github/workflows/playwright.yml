@@ -10,7 +10,7 @@ jobs:
   test:
     name: Run Playwright Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
@@ -33,18 +33,74 @@ jobs:
         env:
           CI: true
 
+      # ── HTML Report ──────────────────────────────────────────────────────
       - name: Upload Playwright HTML report
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: playwright-report
+          name: playwright-html-report
           path: playwright-report/
           retention-days: 30
 
-      - name: Upload test results (on failure)
+      # ── Allure Report ────────────────────────────────────────────────────
+      - name: Set up Java (required by Allure CLI)
+        uses: actions/setup-java@v4
+        if: always()
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install Allure CLI
+        if: always()
+        run: npm run report:allure:generate
+
+      - name: Upload Allure results (raw)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: allure-results
+          path: allure-results/
+          retention-days: 7
+
+      - name: Upload Allure HTML report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: allure-report
+          path: allure-report/
+          retention-days: 30
+
+      # ── Failure artifacts ────────────────────────────────────────────────
+      - name: Upload test-results on failure (traces, screenshots, videos)
         uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: test-results
           path: test-results/
           retention-days: 7
+
+  # ── Deploy Allure report to GitHub Pages (main branch only) ──────────────
+  publish-allure:
+    name: Publish Allure Report to GitHub Pages
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && always()
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download Allure report artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: allure-report
+          path: allure-report
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: allure-report
+          publish_branch: gh-pages
+          destination_dir: allure-report
+          commit_message: 'ci: publish Allure report [skip ci]'
+

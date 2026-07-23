@@ -1,24 +1,8 @@
-import { defineConfig, devices } from '@playwright/test';
-
-export default defineConfig({
-  testDir: '../../',
-  timeout: 30_000,
-  expect: { timeout: 5_000 },
-  fullyParallel: true,
-  reporter: [['list']],
-
-  use: {
-    baseURL: process.env['BASE_URL'] ?? 'https://test.com',
-    trace: 'on-first-retry',
-    screenshot: 'only-on-failure',
-    locale: 'en-IN',
-    timezoneId: 'Asia/Kolkata',
-  },
-
-  projects: [
-    {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
-    },
-  ],
-});
+/** Centralised environment configuration — all env vars resolved here. */
+export const ENV = {
+  BASE_URL: process.env['BASE_URL'] ?? 'https://test.com',
+  USER_EMAIL: process.env['USER_EMAIL'] ?? 'test123@gmail.com',
+  USER_ACCOUNT_ID: process.env['USER_ACCOUNT_ID'] ?? '98765',
+  LOCALE: process.env['LOCALE'] ?? 'en-IN',
+  TIMEZONE: process.env['TIMEZONE'] ?? 'Asia/Kolkata',
+} as const;

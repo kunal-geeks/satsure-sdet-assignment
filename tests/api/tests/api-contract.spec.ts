@@ -1,206 +1,184 @@
 import { test, expect } from '@playwright/test';
-import { z } from 'zod';
-
-/**
- * FR-05 Data Contract — Zod Schema Definition
- *
- * Validates the exact shape and types required by the specification.
- *
- * Key constraints:
- *  - start_date / end_date: ISO 8601 with local timezone offset (not Z / UTC)
- *  - locale: IETF BCP 47 with region subtag (e.g. "en-IN")
- *  - completed: JSON boolean (not string)
- */
-
-// Regex: ISO 8601 datetime with a timezone offset (NOT Z / UTC)
-// Matches: 2024-03-15T16:00:00+05:30  or  2024-03-15T16:00:00-08:00
-const LOCAL_TIMESTAMP_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/;
-
-// Regex: IETF BCP 47 with region subtag — language-REGION (e.g. en-IN, fr-FR)
-const BCP47_WITH_REGION_REGEX = /^[a-z]{2,3}-[A-Z]{2,3}$/;
-
-const FR05Schema = z.object({
-  account_id: z.union([z.string().min(1), z.number()]),
-  account_email: z.string().email(),
-  start_date: z.string().regex(LOCAL_TIMESTAMP_REGEX, {
-    message: 'start_date must be an ISO 8601 timestamp in local time with timezone offset (not UTC/Z)',
-  }),
-  end_date: z.string().regex(LOCAL_TIMESTAMP_REGEX, {
-    message: 'end_date must be an ISO 8601 timestamp in local time with timezone offset (not UTC/Z)',
-  }),
-  locale: z.string().regex(BCP47_WITH_REGION_REGEX, {
-    message: 'locale must be IETF BCP 47 format with region subtag, e.g. en-IN',
-  }),
-  text: z.string().min(1),
-  suggestion_list: z.string().min(1),
-  completed: z.boolean({
-    invalid_type_error: 'completed must be a JSON boolean (true/false), not a string',
-  }),
-});
-
-type FR05Response = z.infer<typeof FR05Schema>;
+import { FR05Schema } from '../schema/fr05.schema';
+import { COMPLIANT_RESPONSE, ASSIGNMENT_SAMPLE_RESPONSE, ALL_SUGGESTIONS } from '../data/api-test-data';
+import { prefixMatch, getErrorPaths, loadFormPage, assertTemporalOrder } from '../helpers/api.helpers';
 
 // ---------------------------------------------------------------------------
-// Sample API responses for testing
+// Schema Validation
 // ---------------------------------------------------------------------------
-
-/** Compliant response — all fields correct */
-const COMPLIANT_RESPONSE: FR05Response = {
-  account_id: '98765',
-  account_email: 'test123@gmail.com',
-  start_date: '2024-03-15T16:00:00+05:30',
-  end_date: '2024-03-15T16:02:00+05:30',
-  locale: 'en-IN',
-  text: 'agile methodology',
-  suggestion_list: 'agile methodology, agile methodology process, agile methodology process testing',
-  completed: true,
-};
-
-/** Non-compliant response — mirrors the assignment's sample API response */
-const ASSIGNMENT_SAMPLE_RESPONSE = {
-  account_id: '98765',
-  account_email: 'test123@gmail.com',
-  start_date: '2024-03-15T10:30:00Z',
-  end_date: '2024-03-15T10:32:00Z',
-  locale: 'en',
-  text: 'agile methodology',
-  suggestion_list: 'agile methodology, agile methodology process, agile methodology process testing',
-  completed: 'true', // string — should be boolean
-};
-
-// ---------------------------------------------------------------------------
-// Helper: Mock the GET /api/submission endpoint with a given body
-// ---------------------------------------------------------------------------
-async function mockGetSubmission(
-  page: import('@playwright/test').Page,
-  responseBody: object,
-  status = 200
-): Promise<void> {
-  await page.route('**/api/submission**', async (route) => {
-    if (route.request().method() === 'GET') {
-      await route.fulfill({
-        status,
-        contentType: 'application/json',
-        body: JSON.stringify(responseBody),
-      });
-    } else {
-      await route.continue();
-    }
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Schema Validation Tests
-// ---------------------------------------------------------------------------
-test.describe('FR-05 API Schema Validation', () => {
-  test('Schema: compliant response passes all validations', async () => {
+test.describe('Schema Validation', () => {
+  test('SV-01: compliant response passes full schema validation', () => {
     const result = FR05Schema.safeParse(COMPLIANT_RESPONSE);
     expect(result.success).toBe(true);
   });
 
-  test('Schema: assignment sample response fails validation (3 defects)', async () => {
+  test('SV-02: assignment sample response fails — 4 schema violations detected', () => {
     const result = FR05Schema.safeParse(ASSIGNMENT_SAMPLE_RESPONSE);
     expect(result.success).toBe(false);
-
     if (!result.success) {
-      const errorPaths = result.error.issues.map((i) => i.path.join('.'));
-      // Must catch: start_date, end_date (UTC instead of local), locale (missing region), completed (string)
-      expect(errorPaths).toContain('start_date');
-      expect(errorPaths).toContain('end_date');
-      expect(errorPaths).toContain('locale');
-      expect(errorPaths).toContain('completed');
+      const paths = getErrorPaths(result.error.issues);
+      expect(paths).toContain('start_date');
+      expect(paths).toContain('end_date');
+      expect(paths).toContain('locale');
+      expect(paths).toContain('completed');
+    }
+  });
+
+  test('SV-03: schema requires all 8 mandatory fields', () => {
+    const result = FR05Schema.safeParse({});
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const paths = getErrorPaths(result.error.issues);
+      ['account_id','account_email','start_date','end_date','locale','text','suggestion_list','completed']
+        .forEach((f) => expect(paths).toContain(f));
     }
   });
 });
 
 // ---------------------------------------------------------------------------
-// Data Type Validation Tests
+// Response Field Validation
 // ---------------------------------------------------------------------------
-test.describe('FR-05 Data Type Validation', () => {
-  test('DT-01: completed must be JSON boolean true, not string "true"', async () => {
-    const withStringCompleted = { ...COMPLIANT_RESPONSE, completed: 'true' as unknown as boolean };
-    const result = FR05Schema.safeParse(withStringCompleted);
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      const completedError = result.error.issues.find((i) => i.path.includes('completed'));
-      expect(completedError).toBeDefined();
-    }
-  });
-
-  test('DT-02: completed must be JSON boolean false, not string "false"', async () => {
-    const withStringFalse = { ...COMPLIANT_RESPONSE, completed: 'false' as unknown as boolean };
-    const result = FR05Schema.safeParse(withStringFalse);
-    expect(result.success).toBe(false);
-  });
-
-  test('DT-03: completed boolean true is accepted', async () => {
-    const result = FR05Schema.safeParse({ ...COMPLIANT_RESPONSE, completed: true });
-    expect(result.success).toBe(true);
-  });
-
-  test('DT-04: completed boolean false is accepted', async () => {
-    const result = FR05Schema.safeParse({ ...COMPLIANT_RESPONSE, completed: false });
-    expect(result.success).toBe(true);
-  });
-
-  test('DT-05: account_email must be a valid email address', async () => {
-    const withBadEmail = { ...COMPLIANT_RESPONSE, account_email: 'not-an-email' };
-    const result = FR05Schema.safeParse(withBadEmail);
-    expect(result.success).toBe(false);
-  });
-
-  test('DT-06: text must be a non-empty string', async () => {
-    const withEmptyText = { ...COMPLIANT_RESPONSE, text: '' };
-    const result = FR05Schema.safeParse(withEmptyText);
-    expect(result.success).toBe(false);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Timestamp / Timezone Validation Tests
-// ---------------------------------------------------------------------------
-test.describe('FR-05 Timestamp Validation', () => {
-  test('TS-01: start_date with UTC Z suffix is rejected', async () => {
-    const withUTC = { ...COMPLIANT_RESPONSE, start_date: '2024-03-15T10:30:00Z' };
-    const result = FR05Schema.safeParse(withUTC);
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      const err = result.error.issues.find((i) => i.path.includes('start_date'));
-      expect(err).toBeDefined();
-    }
-  });
-
-  test('TS-02: end_date with UTC Z suffix is rejected', async () => {
-    const withUTC = { ...COMPLIANT_RESPONSE, end_date: '2024-03-15T10:32:00Z' };
-    const result = FR05Schema.safeParse(withUTC);
-    expect(result.success).toBe(false);
-  });
-
-  test('TS-03: start_date with +05:30 offset is accepted', async () => {
+test.describe('Response Field Validation', () => {
+  test('RFV-01: account_id is present and non-empty', () => {
     const result = FR05Schema.safeParse(COMPLIANT_RESPONSE);
     expect(result.success).toBe(true);
+    if (result.success) expect(String(result.data.account_id).length).toBeGreaterThan(0);
   });
 
-  test('TS-04: end_date must be greater than or equal to start_date', async () => {
-    // Validate temporal ordering (business rule — not enforced by Zod schema, tested manually)
-    const start = new Date(COMPLIANT_RESPONSE.start_date.replace('+05:30', '+05:30'));
-    const end = new Date(COMPLIANT_RESPONSE.end_date.replace('+05:30', '+05:30'));
-    expect(end.getTime()).toBeGreaterThanOrEqual(start.getTime());
+  test('RFV-02: account_email matches the authenticated test user', () => {
+    const result = FR05Schema.safeParse(COMPLIANT_RESPONSE);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.account_email).toBe('test123@gmail.com');
   });
 
-  test('TS-05: IST offset +05:30 is present in both timestamps', async () => {
-    expect(COMPLIANT_RESPONSE.start_date).toMatch(/\+05:30$/);
-    expect(COMPLIANT_RESPONSE.end_date).toMatch(/\+05:30$/);
+  test('RFV-03: start_date uses IST offset +05:30', () => {
+    const result = FR05Schema.safeParse(COMPLIANT_RESPONSE);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.start_date).toMatch(/\+05:30$/);
+  });
+
+  test('RFV-04: end_date uses IST offset +05:30', () => {
+    const result = FR05Schema.safeParse(COMPLIANT_RESPONSE);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.end_date).toMatch(/\+05:30$/);
+  });
+
+  test('RFV-05: locale matches IETF BCP 47 format "en-IN"', () => {
+    const result = FR05Schema.safeParse(COMPLIANT_RESPONSE);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.locale).toBe('en-IN');
+  });
+
+  test('RFV-06: text field matches what the user entered', () => {
+    const result = FR05Schema.safeParse(COMPLIANT_RESPONSE);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.text).toBe('agile methodology');
+  });
+
+  test('RFV-07: suggestion_list is a non-empty comma-separated string', () => {
+    const result = FR05Schema.safeParse(COMPLIANT_RESPONSE);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(typeof result.data.suggestion_list).toBe('string');
+      expect(result.data.suggestion_list).toContain(',');
+    }
+  });
+
+  test('RFV-08: completed is a boolean', () => {
+    const result = FR05Schema.safeParse(COMPLIANT_RESPONSE);
+    expect(result.success).toBe(true);
+    if (result.success) expect(typeof result.data.completed).toBe('boolean');
   });
 });
 
 // ---------------------------------------------------------------------------
-// Locale Validation Tests (IETF BCP 47)
+// Data Type Validation
 // ---------------------------------------------------------------------------
-test.describe('FR-05 Locale Validation (IETF BCP 47)', () => {
-  test('LOC-01: locale "en" (language only) is rejected', async () => {
-    const withLangOnly = { ...COMPLIANT_RESPONSE, locale: 'en' };
-    const result = FR05Schema.safeParse(withLangOnly);
+test.describe('Data Type Validation', () => {
+  test('DT-01: completed string "true" is rejected', () => {
+    const result = FR05Schema.safeParse({ ...COMPLIANT_RESPONSE, completed: 'true' });
+    expect(result.success).toBe(false);
+  });
+
+  test('DT-02: completed string "false" is rejected', () => {
+    expect(FR05Schema.safeParse({ ...COMPLIANT_RESPONSE, completed: 'false' }).success).toBe(false);
+  });
+
+  test('DT-03: completed number 1 is rejected', () => {
+    expect(FR05Schema.safeParse({ ...COMPLIANT_RESPONSE, completed: 1 }).success).toBe(false);
+  });
+
+  test('DT-04: completed boolean true is accepted', () => {
+    expect(FR05Schema.safeParse({ ...COMPLIANT_RESPONSE, completed: true }).success).toBe(true);
+  });
+
+  test('DT-05: completed boolean false is accepted', () => {
+    expect(FR05Schema.safeParse({ ...COMPLIANT_RESPONSE, completed: false }).success).toBe(true);
+  });
+
+  test('DT-06: account_email must be a valid email string', () => {
+    expect(FR05Schema.safeParse({ ...COMPLIANT_RESPONSE, account_email: 'not-an-email' }).success).toBe(false);
+  });
+
+  test('DT-07: text must be a non-empty string', () => {
+    expect(FR05Schema.safeParse({ ...COMPLIANT_RESPONSE, text: '' }).success).toBe(false);
+  });
+
+  test('DT-08: suggestion_list must be a non-empty string', () => {
+    expect(FR05Schema.safeParse({ ...COMPLIANT_RESPONSE, suggestion_list: '' }).success).toBe(false);
+  });
+
+  test('DT-09: account_id accepts both string and number types', () => {
+    expect(FR05Schema.safeParse({ ...COMPLIANT_RESPONSE, account_id: '98765' }).success).toBe(true);
+    expect(FR05Schema.safeParse({ ...COMPLIANT_RESPONSE, account_id: 98765 }).success).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Timestamp Validation
+// ---------------------------------------------------------------------------
+test.describe('Timestamp Validation', () => {
+  test('TS-01: start_date with Z (UTC) suffix is rejected', () => {
+    const result = FR05Schema.safeParse({ ...COMPLIANT_RESPONSE, start_date: '2024-03-15T10:30:00Z' });
+    expect(result.success).toBe(false);
+    if (!result.success) expect(getErrorPaths(result.error.issues)).toContain('start_date');
+  });
+
+  test('TS-02: end_date with Z (UTC) suffix is rejected', () => {
+    expect(FR05Schema.safeParse({ ...COMPLIANT_RESPONSE, end_date: '2024-03-15T10:32:00Z' }).success).toBe(false);
+  });
+
+  test('TS-03: start_date with +05:30 (IST) offset is accepted', () => {
+    expect(FR05Schema.safeParse(COMPLIANT_RESPONSE).success).toBe(true);
+  });
+
+  test('TS-04: end_date is temporally >= start_date', () => {
+    expect(() => assertTemporalOrder(COMPLIANT_RESPONSE.start_date, COMPLIANT_RESPONSE.end_date)).not.toThrow();
+  });
+
+  test('TS-05: end_date before start_date fails temporal ordering check', () => {
+    expect(() => assertTemporalOrder('2024-03-15T16:05:00+05:30', '2024-03-15T16:00:00+05:30')).toThrow();
+  });
+
+  test('TS-06: plain date string (no time) is rejected', () => {
+    expect(FR05Schema.safeParse({ ...COMPLIANT_RESPONSE, start_date: '2024-03-15' }).success).toBe(false);
+  });
+
+  test('TS-07: non-IST offset (-08:00) is accepted by schema', () => {
+    expect(FR05Schema.safeParse({
+      ...COMPLIANT_RESPONSE,
+      start_date: '2024-03-15T02:30:00-08:00',
+      end_date: '2024-03-15T02:32:00-08:00',
+    }).success).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Locale Validation (IETF BCP 47)
+// ---------------------------------------------------------------------------
+test.describe('Locale Validation (IETF BCP 47)', () => {
+  test('LOC-01: "en" (language only) is rejected', () => {
+    const result = FR05Schema.safeParse({ ...COMPLIANT_RESPONSE, locale: 'en' });
     expect(result.success).toBe(false);
     if (!result.success) {
       const err = result.error.issues.find((i) => i.path.includes('locale'));
@@ -208,109 +186,134 @@ test.describe('FR-05 Locale Validation (IETF BCP 47)', () => {
     }
   });
 
-  test('LOC-02: locale "en-IN" is accepted', async () => {
-    const result = FR05Schema.safeParse({ ...COMPLIANT_RESPONSE, locale: 'en-IN' });
-    expect(result.success).toBe(true);
+  test('LOC-02: "en-IN" is accepted', () => {
+    expect(FR05Schema.safeParse({ ...COMPLIANT_RESPONSE, locale: 'en-IN' }).success).toBe(true);
   });
 
-  test('LOC-03: locale "fr-FR" is accepted (valid BCP 47)', async () => {
-    const result = FR05Schema.safeParse({ ...COMPLIANT_RESPONSE, locale: 'fr-FR' });
-    expect(result.success).toBe(true);
+  test('LOC-03: "fr-FR" is accepted', () => {
+    expect(FR05Schema.safeParse({ ...COMPLIANT_RESPONSE, locale: 'fr-FR' }).success).toBe(true);
   });
 
-  test('LOC-04: locale "english" is rejected (not BCP 47)', async () => {
-    const result = FR05Schema.safeParse({ ...COMPLIANT_RESPONSE, locale: 'english' });
-    expect(result.success).toBe(false);
+  test('LOC-04: "english" (not BCP 47) is rejected', () => {
+    expect(FR05Schema.safeParse({ ...COMPLIANT_RESPONSE, locale: 'english' }).success).toBe(false);
   });
 
-  test('LOC-05: locale "EN-in" is rejected (incorrect casing)', async () => {
-    // BCP 47 convention: lowercase language, uppercase region
-    const result = FR05Schema.safeParse({ ...COMPLIANT_RESPONSE, locale: 'EN-in' });
-    expect(result.success).toBe(false);
+  test('LOC-05: "EN-in" (wrong casing) is rejected', () => {
+    expect(FR05Schema.safeParse({ ...COMPLIANT_RESPONSE, locale: 'EN-in' }).success).toBe(false);
+  });
+
+  test('LOC-06: "en-" (no region) is rejected', () => {
+    expect(FR05Schema.safeParse({ ...COMPLIANT_RESPONSE, locale: 'en-' }).success).toBe(false);
   });
 });
 
 // ---------------------------------------------------------------------------
-// suggestion_list Validation Tests
+// Suggestion List Validation
 // ---------------------------------------------------------------------------
-test.describe('FR-05 suggestion_list Validation', () => {
-  const allSuggestions = ['agile methodology', 'agile methodology process', 'agile methodology process testing'];
-
-  function prefixMatch(input: string, suggestions: string[]): string[] {
-    return suggestions.filter((s) => s.startsWith(input));
-  }
-
-  test('SL-01: suggestion_list for "agile methodology" contains all 3 prefix-matching suggestions', async () => {
-    const input = 'agile methodology';
-    const expected = prefixMatch(input, allSuggestions);
-    expect(expected).toHaveLength(3);
-
-    const suggestionList = COMPLIANT_RESPONSE.suggestion_list.split(',').map((s) => s.trim());
-    for (const item of expected) {
-      expect(suggestionList).toContain(item);
-    }
+test.describe('Suggestion List Validation', () => {
+  test('SL-01: "agile methodology" matches all 3 suggestions', () => {
+    const matches = prefixMatch('agile methodology', ALL_SUGGESTIONS);
+    expect(matches).toHaveLength(3);
+    expect(matches).toEqual(expect.arrayContaining([...ALL_SUGGESTIONS]));
   });
 
-  test('SL-02: suggestion_list for "agile methodology process" must exclude "agile methodology" alone', async () => {
-    const input = 'agile methodology process';
-    const matching = prefixMatch(input, allSuggestions);
-
-    // "agile methodology" does NOT start with "agile methodology process"
-    expect(matching).not.toContain('agile methodology');
-    expect(matching).toContain('agile methodology process');
-    expect(matching).toContain('agile methodology process testing');
+  test('SL-02: "agile methodology process" excludes "agile methodology"', () => {
+    const matches = prefixMatch('agile methodology process', ALL_SUGGESTIONS);
+    expect(matches).not.toContain('agile methodology');
+    expect(matches).toContain('agile methodology process');
+    expect(matches).toContain('agile methodology process testing');
   });
 
-  test('SL-03: suggestion_list for "xyz" input should be empty', async () => {
-    const input = 'xyz';
-    const matching = prefixMatch(input, allSuggestions);
-    expect(matching).toHaveLength(0);
+  test('SL-03: non-matching input returns empty list', () => {
+    expect(prefixMatch('xyz', ALL_SUGGESTIONS)).toHaveLength(0);
   });
 
-  test('SL-04: suggestion_list field must be a non-empty string when there are matches', async () => {
+  test('SL-04: suggestion_list in compliant response contains all expected matches', () => {
     const result = FR05Schema.safeParse(COMPLIANT_RESPONSE);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(typeof result.data.suggestion_list).toBe('string');
-      expect(result.data.suggestion_list.length).toBeGreaterThan(0);
+      const items = result.data.suggestion_list.split(',').map((s) => s.trim());
+      prefixMatch('agile methodology', ALL_SUGGESTIONS).forEach((exp) => {
+        expect(items).toContain(exp);
+      });
     }
+  });
+
+  test('SL-05: suggestion_list must not include non-matching entries', () => {
+    const input = 'agile methodology process';
+    const nonMatching = ALL_SUGGESTIONS.filter((s) => !s.startsWith(input));
+    const payloadItems = 'agile methodology process, agile methodology process testing'
+      .split(',').map((s) => s.trim());
+    nonMatching.forEach((excluded) => expect(payloadItems).not.toContain(excluded));
   });
 });
 
 // ---------------------------------------------------------------------------
-// Negative Test Cases
+// Negative Tests — missing fields, invalid datatypes, network-level
 // ---------------------------------------------------------------------------
-test.describe('Negative API Tests', () => {
-  const FIXTURE_PATH = require('path').resolve(__dirname, '../../ui/fixtures/autocomplete-form.html');
-  const fs = require('fs') as typeof import('fs');
+test.describe('Negative Tests', () => {
+  // Missing field tests
+  test('NEG-MF-01: missing "text" fails schema', () => {
+    const { text: _, ...body } = COMPLIANT_RESPONSE;
+    const result = FR05Schema.safeParse(body);
+    expect(result.success).toBe(false);
+    if (!result.success) expect(getErrorPaths(result.error.issues)).toContain('text');
+  });
 
-  /** Navigate to the mocked form page so fetch() calls resolve against https://test.com */
-  async function loadForm(page: import('@playwright/test').Page): Promise<void> {
-    await page.route('**/autocomplete-form', async (route) => {
-      const html = fs.readFileSync(FIXTURE_PATH, 'utf-8') as string;
-      await route.fulfill({ contentType: 'text/html', body: html });
-    });
-    await page.goto('https://test.com/autocomplete-form');
-  }
+  test('NEG-MF-02: missing "account_email" fails schema', () => {
+    const { account_email: _, ...body } = COMPLIANT_RESPONSE;
+    expect(FR05Schema.safeParse(body).success).toBe(false);
+  });
 
-  test('NEG-01: API rejects payload with missing required field "text"', async ({ page }) => {
-    await loadForm(page);
+  test('NEG-MF-03: missing "locale" fails schema', () => {
+    const { locale: _, ...body } = COMPLIANT_RESPONSE;
+    expect(FR05Schema.safeParse(body).success).toBe(false);
+  });
 
-    // Mock the submission endpoint to return 400 when text is missing
+  test('NEG-MF-04: missing "completed" fails schema', () => {
+    const { completed: _, ...body } = COMPLIANT_RESPONSE;
+    expect(FR05Schema.safeParse(body).success).toBe(false);
+  });
+
+  test('NEG-MF-05: missing "start_date" fails schema', () => {
+    const { start_date: _, ...body } = COMPLIANT_RESPONSE;
+    expect(FR05Schema.safeParse(body).success).toBe(false);
+  });
+
+  // Invalid datatype tests
+  test('NEG-IDT-01: completed as number is rejected', () => {
+    expect(FR05Schema.safeParse({ ...COMPLIANT_RESPONSE, completed: 1 }).success).toBe(false);
+  });
+
+  test('NEG-IDT-02: account_email as number is rejected', () => {
+    expect(FR05Schema.safeParse({ ...COMPLIANT_RESPONSE, account_email: 12345 }).success).toBe(false);
+  });
+
+  test('NEG-IDT-03: start_date as epoch milliseconds (number) is rejected', () => {
+    expect(FR05Schema.safeParse({ ...COMPLIANT_RESPONSE, start_date: 1710494400000 }).success).toBe(false);
+  });
+
+  test('NEG-IDT-04: locale as boolean is rejected', () => {
+    expect(FR05Schema.safeParse({ ...COMPLIANT_RESPONSE, locale: true }).success).toBe(false);
+  });
+
+  test('NEG-IDT-05: suggestion_list as array is rejected (must be comma-separated string)', () => {
+    expect(FR05Schema.safeParse({ ...COMPLIANT_RESPONSE, suggestion_list: ['agile methodology'] }).success).toBe(false);
+  });
+
+  // Network-level negative tests
+  test('NEG-NET-01: API returns 400 when required field "text" is missing', async ({ page }) => {
+    await loadFormPage(page);
+
     await page.route('**/api/submission', async (route) => {
       const body = JSON.parse(route.request().postData() ?? '{}') as Record<string, unknown>;
-      if (!body['text']) {
-        await route.fulfill({
-          status: 400,
-          contentType: 'application/json',
-          body: JSON.stringify({ error: 'Missing required field: text' }),
-        });
-      } else {
-        await route.fulfill({ status: 200, body: JSON.stringify({ completed: true }) });
-      }
+      await route.fulfill({
+        status: body['text'] ? 200 : 400,
+        contentType: 'application/json',
+        body: JSON.stringify(body['text'] ? { completed: true } : { error: 'Missing required field: text' }),
+      });
     });
 
-    // Send a request without the text field
     const response = await page.evaluate(async () => {
       const res = await fetch('/api/submission', {
         method: 'POST',
@@ -318,7 +321,6 @@ test.describe('Negative API Tests', () => {
         body: JSON.stringify({
           account_id: '98765',
           account_email: 'test123@gmail.com',
-          // text is intentionally missing
           suggestion_list: 'agile methodology',
           locale: 'en-IN',
           start_date: '2024-03-15T16:00:00+05:30',
@@ -333,21 +335,17 @@ test.describe('Negative API Tests', () => {
     expect((response.body as { error: string }).error).toContain('text');
   });
 
-  test('NEG-02: API rejects payload with invalid locale format', async ({ page }) => {
-    await loadForm(page);
+  test('NEG-NET-02: API returns 422 when locale format is invalid', async ({ page }) => {
+    await loadFormPage(page);
 
     await page.route('**/api/submission', async (route) => {
       const body = JSON.parse(route.request().postData() ?? '{}') as Record<string, unknown>;
-      const localeValid = /^[a-z]{2,3}-[A-Z]{2,3}$/.test(String(body['locale'] ?? ''));
-      if (!localeValid) {
-        await route.fulfill({
-          status: 422,
-          contentType: 'application/json',
-          body: JSON.stringify({ error: 'Invalid locale format. Expected IETF BCP 47 with region subtag.' }),
-        });
-      } else {
-        await route.fulfill({ status: 200, body: JSON.stringify({ completed: true }) });
-      }
+      const valid = /^[a-z]{2,3}-[A-Z]{2,3}$/.test(String(body['locale'] ?? ''));
+      await route.fulfill({
+        status: valid ? 200 : 422,
+        contentType: 'application/json',
+        body: JSON.stringify(valid ? { completed: true } : { error: 'Invalid locale format. Expected IETF BCP 47 with region subtag.' }),
+      });
     });
 
     const response = await page.evaluate(async () => {
@@ -359,7 +357,7 @@ test.describe('Negative API Tests', () => {
           account_email: 'test123@gmail.com',
           text: 'agile methodology',
           suggestion_list: 'agile methodology',
-          locale: 'english', // invalid — not IETF BCP 47
+          locale: 'english',
           start_date: '2024-03-15T16:00:00+05:30',
           end_date: '2024-03-15T16:02:00+05:30',
           completed: false,
@@ -370,17 +368,5 @@ test.describe('Negative API Tests', () => {
 
     expect(response.status).toBe(422);
     expect((response.body as { error: string }).error).toContain('locale');
-  });
-
-  test('NEG-03: Schema rejects response with completed as number', async () => {
-    const withNumberCompleted = { ...COMPLIANT_RESPONSE, completed: 1 as unknown as boolean };
-    const result = FR05Schema.safeParse(withNumberCompleted);
-    expect(result.success).toBe(false);
-  });
-
-  test('NEG-04: Schema rejects response with missing account_email', async () => {
-    const { account_email: _, ...withoutEmail } = COMPLIANT_RESPONSE;
-    const result = FR05Schema.safeParse(withoutEmail);
-    expect(result.success).toBe(false);
   });
 });

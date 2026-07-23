@@ -7,13 +7,20 @@
     "test:ui": "playwright test tests/ui/tests/",
     "test:api": "playwright test tests/api/tests/",
     "test:headed": "playwright test --headed",
-    "test:report": "playwright show-report",
     "test:debug": "playwright test --debug",
-    "install:browsers": "playwright install chromium"
+    "install:browsers": "playwright install chromium",
+
+    "report:html": "playwright show-report playwright-report",
+    "report:allure": "allure generate allure-results --clean -o allure-report && allure open allure-report",
+    "report:allure:generate": "allure generate allure-results --clean -o allure-report",
+    "report:allure:open": "allure open allure-report",
+    "report:all": "npm run report:allure:generate && npm run report:html"
   },
   "devDependencies": {
     "@playwright/test": "^1.44.0",
     "@types/node": "^20.12.0",
+    "allure-commandline": "^2.43.0",
+    "allure-playwright": "^3.10.2",
     "typescript": "^5.4.5"
   },
   "dependencies": {

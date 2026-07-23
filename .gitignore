@@ -6,6 +6,10 @@ playwright-report/
 test-results/
 dist/
 
+# Allure output
+allure-results/
+allure-report/
+
 # Environment files
 .env
 .env.local
