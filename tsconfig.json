@@ -8,6 +8,7 @@
     "skipLibCheck": true,
     "outDir": "./dist",
     "rootDir": "./",
+    "ignoreDeprecations": "6.0",
     "baseUrl": "./",
     "paths": {
       "@pages/*": ["tests/ui/pages/*"]
