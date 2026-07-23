@@ -1,0 +1,1 @@
+[{"values":["Playwright"],"name":"framework"},{"values":["TypeScript"],"name":"language"},{"values":["Chromium"],"name":"browser"},{"values":["https://test.com"],"name":"baseURL"},{"values":["en-IN"],"name":"locale"},{"values":["Asia/Kolkata"],"name":"timezone"}]
