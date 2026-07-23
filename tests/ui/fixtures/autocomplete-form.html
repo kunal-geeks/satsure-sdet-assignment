@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Autocomplete Form</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 40px; }
+    .form-container { max-width: 500px; margin: auto; }
+    #input-field { width: 100%; padding: 8px; box-sizing: border-box; }
+    ul.suggestions { list-style: none; padding: 0; border: 1px solid #ccc; margin: 0; }
+    ul.suggestions li { padding: 8px; cursor: pointer; }
+    ul.suggestions li:hover { background: #f0f0f0; }
+    ul.suggestions li.hidden { display: none; }
+    #next-button { margin-top: 12px; padding: 8px 16px; cursor: pointer; }
+    span.error-message { color: red; display: none; }
+    div.success-container { display: none; color: green; }
+  </style>
+</head>
+<body>
+  <div class="form-container">
+    <label for="input-field">Enter a value:</label>
+    <input type="text" id="input-field" placeholder="Type here...">
+    <ul class="suggestions">
+      <li>agile methodology</li>
+      <li>agile methodology process</li>
+      <li>agile methodology process testing</li>
+    </ul>
+    <button id="next-button">Next</button>
+    <span class="error-message">Error: Invalid input. Please select a valid suggestion.</span>
+    <div class="success-container">
+      <p>Success! Your response has been recorded.</p>
+    </div>
+  </div>
+
+  <script>
+    const input = document.getElementById('input-field');
+    const suggestions = document.querySelectorAll('ul.suggestions li');
+    const nextBtn = document.getElementById('next-button');
+    const errorMsg = document.querySelector('span.error-message');
+    const successBox = document.querySelector('div.success-container');
+
+    // Track the start time when the page loads
+    const startDate = new Date();
+
+    // Prefix-match filtering (FR-02 default)
+    input.addEventListener('input', () => {
+      const val = input.value.toLowerCase();
+      suggestions.forEach(li => {
+        const text = li.textContent.toLowerCase();
+        if (val === '' || text.startsWith(val)) {
+          li.classList.remove('hidden');
+        } else {
+          li.classList.add('hidden');
+        }
+      });
+    });
+
+    // Escape clears the input and resets suggestions
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        input.value = '';
+        suggestions.forEach(li => li.classList.remove('hidden'));
+        errorMsg.style.display = 'none';
+        successBox.style.display = 'none';
+      }
+    });
+
+    // Click suggestion to populate input
+    suggestions.forEach(li => {
+      li.addEventListener('click', () => {
+        input.value = li.textContent.trim();
+        // Re-filter after selection
+        input.dispatchEvent(new Event('input'));
+      });
+    });
+
+    // Tab order: input -> suggestions (each li is focusable) -> next button
+    suggestions.forEach(li => { li.setAttribute('tabindex', '0'); });
+
+    // Submit handler
+    nextBtn.addEventListener('click', async () => {
+      const text = input.value.trim();
+      if (!text) {
+        errorMsg.style.display = 'block';
+        successBox.style.display = 'none';
+        return;
+      }
+
+      const endDate = new Date();
+      const matchingSuggestions = Array.from(suggestions)
+        .filter(li => !li.classList.contains('hidden'))
+        .map(li => li.textContent.trim())
+        .join(', ');
+
+      const payload = {
+        account_id: '98765',
+        account_email: 'test123@gmail.com',
+        start_date: startDate.toISOString(),
+        end_date: endDate.toISOString(),
+        locale: navigator.language,
+        text: text,
+        suggestion_list: matchingSuggestions,
+        completed: false,
+      };
+
+      try {
+        const response = await fetch('/api/submission', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (response.ok) {
+          successBox.style.display = 'block';
+          errorMsg.style.display = 'none';
+        } else {
+          errorMsg.style.display = 'block';
+          successBox.style.display = 'none';
+        }
+      } catch {
+        errorMsg.style.display = 'block';
+        successBox.style.display = 'none';
+      }
+    });
+  </script>
+</body>
+</html>

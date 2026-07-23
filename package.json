@@ -1,0 +1,22 @@
+{
+  "name": "satsure-sdet-assignment",
+  "version": "1.0.0",
+  "description": "SatSure SDET Practical Assignment - Playwright TypeScript Test Suite",
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test tests/ui/tests/",
+    "test:api": "playwright test tests/api/tests/",
+    "test:headed": "playwright test --headed",
+    "test:report": "playwright show-report",
+    "test:debug": "playwright test --debug",
+    "install:browsers": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.44.0",
+    "@types/node": "^20.12.0",
+    "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "zod": "^3.23.0"
+  }
+}
