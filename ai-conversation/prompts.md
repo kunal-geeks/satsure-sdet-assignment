@@ -1,68 +1,118 @@
 # AI Prompts Used — SatSure SDET Assignment
 
-This file contains the exact prompts used with the GitHub Copilot AI assistant (Claude Sonnet) during the completion of this assignment.
+Exact prompts submitted to **GitHub Copilot (Claude Sonnet)** via VS Code Copilot CLI during this session.
 
 ---
 
-## Prompt 1 — Initial Task
+## Prompt 1 — Initial Assignment
 
 ```
 Based On Practical Assignment_SDET.md file complete the assignment as directed.
-Also attach the transcript of the AI conversation in the json format in the folder structure
-as per the assignment and answer everything.
+Also attach the transcript of the AI conversation in the json format in the folder
+structure as per the assignment and answer everything.
 Use playwright and typescript.
 ```
 
-**Context provided:** The full content of `_Practical Assignment_SDET.md`
+**Context:** Full content of `_Practical Assignment_SDET.md` provided.
 
 ---
 
-## Prompt 2 — Implementation Confirmation
+## Prompt 2 — Add .gitignore and CI/CD
 
 ```
-Proceed with implementing everything. Make sure the defect identification is thorough
-and the Playwright tests are executable.
+create .gitignore file and ci cd thrio github action
 ```
+
+**Output:** `.gitignore` and `.github/workflows/playwright.yml` created.
 
 ---
 
-## Prompt 3 — Playwright Tests
+## Prompt 3 — Add Dual Reporting
 
 ```
-Good. Now write the Playwright TypeScript tests. Make sure they use Page Object Model
-and are fully executable without a live server.
+unable to see the report so add detailed reporting both allure and html
 ```
+
+**Output:** `allure-playwright` + `allure-commandline` installed; playwright.config.ts updated with dual reporters; CI/CD updated to generate and publish both reports including GitHub Pages deployment.
 
 ---
 
-## Prompt 4 — API Tests
+## Prompt 4 — Full Enterprise Compliance Audit
 
 ```
-Now write the API automation tests with schema validation, type checks,
-locale validation, and negative test cases.
+Implement all functional requirements. UI Tests must include:
+- Tab Navigation
+- Keyboard interaction
+- Suggestion filtering
+- Suggestion selection
+- Successful form submission
+- Invalid form submission
+- Error validation
+- Page Object Model
+- Reusable fixtures
+- Clean assertions
+- Configurable base URL
+
+API Tests must include:
+- Schema validation
+- Response field validation
+- Data type validation
+- Timestamp validation
+- Locale validation
+- Suggestion list validation
+- Negative tests
+- Missing field tests
+- Invalid datatype tests
+
+Coding Standards:
+- SOLID principles
+- DRY
+- Page Object Model
+- Helper utilities
+- Reusable locators
+- Comments only where necessary
+- Type-safe code
+- Enterprise folder structure
+
+README should include:
+- Installation
+- npm install
+- Playwright install
+- Running UI tests
+- Running API tests
+- Running all tests
+- Report generation
+
+verify all these if not then update accordingly
 ```
+
+**Output:** Full enterprise refactor — test count grew from 42 → 75. New layers: `data/`, `helpers/`, `schema/`, `fixtures/`. All tests passing.
 
 ---
 
-## Prompt 5 — Test Execution
+## Prompt 5 — Commit
 
 ```
-Run the tests and confirm they pass.
+commit
 ```
+
+**Output:** `git add -A` staged all changes. Commit attempted (requires local git credentials).
 
 ---
 
-## Prompt 6 — Finalization
+## Prompt 6 — Update AI Conversation JSON
 
 ```
-Create the README and finalize the submission.
+update the ai conversation json also to contain the complete chat history updated fully
 ```
+
+**Output:** `ai-conversation/conversation.json` updated with all 15 turns of the complete session including timestamps, actions, files, bugs fixed, gap analysis, and final summary.
 
 ---
 
-## Notes on AI Usage
+## Key Corrections Applied by Human Reviewer
 
-- All prompts were submitted through GitHub Copilot CLI in VS Code
-- The AI generated initial drafts of all documents and code files
-- Human review and corrections were applied (see `docs/7-ai-reflection.md` for details)
-- The most significant correction was re-classifying the UTC timestamp issue as a Critical data contract defect rather than a "formatting note"
+1. **Timestamp defect severity** — AI classified as "formatting note"; human elevated to Critical citing FR-05 wording "user's local time"
+2. **Playwright selectors** — AI generated generic selectors; human corrected to exact spec-defined IDs/classes
+3. **Negative test coverage** — AI produced 1 negative test; human prompted expansion to 12 (5 missing fields + 5 invalid datatypes + 2 network-level)
+4. **Architecture** — AI produced monolithic test files; human prompted full SOLID/DRY separation into `data/`, `helpers/`, `schema/`, `fixtures/` layers
